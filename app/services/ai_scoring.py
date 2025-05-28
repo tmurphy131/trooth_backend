@@ -2,9 +2,8 @@ import openai
 import os
 
 # Set your API key securely (or via env variable)
-openai.api_key = "REPLACE_WITH_YOUR_API_KEY"  # Use os.getenv in production
 
-# openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def score_assessment(answers: dict) -> dict:
     """Send answers to GPT and receive scored feedback."""
