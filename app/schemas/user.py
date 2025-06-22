@@ -2,7 +2,6 @@ from pydantic import BaseModel, validator
 from typing import Optional
 
 class UserCreate(BaseModel):
-    id: str
     name: str
     email: str
     role: str
@@ -20,4 +19,4 @@ class UserOut(BaseModel):
     role: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True

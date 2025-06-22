@@ -6,6 +6,7 @@ from app.db import get_db
 from app.services.auth import verify_token
 from app.services import ai_scoring
 from app.services.email import send_assessment_email
+from app.exceptions import ForbiddenException, NotFoundException
 import uuid
 
 router = APIRouter()
@@ -19,11 +20,11 @@ def create_assessment(
     try:
         user_id = decoded_token["uid"]
         if user_id != assessment_input.user_id:
-            raise HTTPException(status_code=403, detail="User ID does not match authenticated user.")
+            raise ForbiddenException("User ID does not match authenticated user.")
 
         apprentice = db.query(user_model.User).filter(user_model.User.id == user_id).first()
         if not apprentice:
-            raise HTTPException(status_code=404, detail="User not found.")
+            raise NotFoundException("User not found.")
 
         mentor_link = db.query(mentor_model.MentorApprentice).filter_by(apprentice_id=user_id).first()
         if not mentor_link:
@@ -31,7 +32,7 @@ def create_assessment(
 
         mentor = db.query(user_model.User).filter_by(id=mentor_link.mentor_id).first()
         if not mentor:
-            raise HTTPException(status_code=404, detail="Mentor not found.")
+            raise NotFoundException("Mentor not found.")
 
         ai_result = ai_scoring.score_assessment(assessment_input.answers)
 

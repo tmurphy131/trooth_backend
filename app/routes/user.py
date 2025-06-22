@@ -7,6 +7,7 @@ from app.services.auth import verify_token, require_roles
 from firebase_admin import auth
 from app.models.mentor_apprentice import MentorApprentice
 from app.models.user import User
+from app.exceptions import NotFoundException
 
 router = APIRouter()
 
@@ -14,11 +15,11 @@ router = APIRouter()
 def assign_apprentice(mentor_id: str, apprentice_id: str, db: Session = Depends(get_db)):
     mentor = db.query(User).filter_by(id=mentor_id, role="mentor").first()
     if not mentor:
-        raise HTTPException(status_code=404, detail="Mentor not found")
+        raise NotFoundException("Mentor not found")
 
     apprentice = db.query(User).filter_by(id=apprentice_id, role="apprentice").first()
     if not apprentice:
-        raise HTTPException(status_code=404, detail="Apprentice not found")
+        raise NotFoundException("Apprentice not found")
 
     relationship = MentorApprentice(mentor_id=mentor_id, apprentice_id=apprentice_id)
     db.add(relationship)
@@ -27,7 +28,7 @@ def assign_apprentice(mentor_id: str, apprentice_id: str, db: Session = Depends(
 
 @router.post("/", response_model=user_schema.UserOut)
 def create_user(user: user_schema.UserCreate, db: Session = Depends(get_db), decoded_token=Depends(verify_token)):
-    existing_user = db.query(user_model.User).filter(user_model.User.id == user.id).first()
+    existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         return existing_user
 

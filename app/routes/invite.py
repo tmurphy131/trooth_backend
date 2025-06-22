@@ -9,6 +9,9 @@ from app.models.mentor_apprentice import MentorApprentice
 from app.models.apprentice_invitation import ApprenticeInvitation
 from app.schemas.invite import InviteCreate, InviteAccept
 from app.services.email import send_invitation_email
+from app.exceptions import NotFoundException
+from app.exceptions import ValidationException
+
 
 router = APIRouter()
 
@@ -16,7 +19,7 @@ router = APIRouter()
 def invite_apprentice(invite: InviteCreate, db: Session = Depends(get_db)):
     mentor = db.query(User).filter_by(id=invite.mentor_id, role="mentor").first()
     if not mentor:
-        raise HTTPException(status_code=404, detail="Mentor not found")
+        raise NotFoundException("Mentor not found")
 
     existing = db.query(ApprenticeInvitation).filter(
         ApprenticeInvitation.apprentice_email == invite.apprentice_email,
@@ -44,6 +47,8 @@ def invite_apprentice(invite: InviteCreate, db: Session = Depends(get_db)):
 @router.post("/accept-invite")
 def accept_invite(data: InviteAccept, db: Session = Depends(get_db)):
     invitation = db.query(ApprenticeInvitation).filter_by(token=data.token).first()
+    if invitation.expires_at < datetime.utcnow():
+        raise ValidationException("This invitation has expired.")
     if not invitation or invitation.expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Invitation is invalid or expired")
 
@@ -53,7 +58,7 @@ def accept_invite(data: InviteAccept, db: Session = Depends(get_db)):
     # Check if apprentice user exists
     apprentice = db.query(User).filter_by(id=data.apprentice_id, role="apprentice").first()
     if not apprentice:
-        raise HTTPException(status_code=404, detail="Apprentice not found")
+        raise NotFoundException("Apprentice not found")
 
     invitation.accepted = True
     relationship = MentorApprentice(

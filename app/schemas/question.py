@@ -8,7 +8,7 @@ class CategoryOut(BaseModel):
     name: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class QuestionCreate(BaseModel):
     text: str
@@ -20,4 +20,4 @@ class QuestionOut(BaseModel):
     category_id: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True

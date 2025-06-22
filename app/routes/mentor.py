@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.services.auth import require_mentor
 from app.db import get_db
 from app.models.user import User
@@ -7,8 +8,11 @@ from app.models.mentor_apprentice import MentorApprentice
 from app.models.assessment_draft import AssessmentDraft
 from app.schemas.assessment_draft import AssessmentDraftOut
 from app.models.user import User as UserModel
+from app.schemas.apprentice_profile import ApprenticeProfileOut
 from fastapi import Query
 from datetime import datetime
+from app.services.auth import get_current_user
+from app.exceptions import ForbiddenException, NotFoundException
 
 router = APIRouter()
 
@@ -46,7 +50,7 @@ def get_apprentice_draft(
         mentor_id=current_user.id, apprentice_id=apprentice_id
     ).first()
     if not mapping:
-        raise HTTPException(status_code=403, detail="Not authorized to view this apprentice")
+        raise ForbiddenException("Not authorized to view this apprentice")
 
     draft = (
         db.query(AssessmentDraft)
@@ -54,7 +58,7 @@ def get_apprentice_draft(
         .first()
     )
     if not draft:
-        raise HTTPException(status_code=404, detail="No draft found for apprentice")
+        raise NotFoundException("No draft found for apprentice")
 
     return draft
 
@@ -79,7 +83,7 @@ def get_submitted_assessments_for_apprentice(
         apprentice_id=apprentice_id
     ).first()
     if not mapping:
-        raise HTTPException(status_code=403, detail="Not authorized to view this apprentice")
+        raise ForbiddenException("Not authorized to view this apprentice")
 
     query = db.query(Assessment).filter_by(apprentice_id=apprentice_id)
 
@@ -101,7 +105,7 @@ def get_assessment_detail(
 ):
     assessment = db.query(Assessment).filter_by(id=assessment_id).first()
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise NotFoundException("Assessment not found")
 
     # Check mentor-apprentice relationship
     mapping = db.query(MentorApprentice).filter_by(
@@ -109,6 +113,172 @@ def get_assessment_detail(
         apprentice_id=assessment.apprentice_id
     ).first()
     if not mapping:
-        raise HTTPException(status_code=403, detail="Not authorized to view this assessment")
+        raise ForbiddenException("Not authorized to view this assessment")
 
     return assessment
+
+from app.models.assessment_draft import AssessmentDraft
+from app.models.user import User
+from app.schemas.assessment_draft import AssessmentDraftOut
+from fastapi import Query
+from datetime import datetime
+
+@router.get("/submitted-drafts", response_model=list[AssessmentDraftOut])
+def get_submitted_drafts(
+    apprentice_id: str = Query(default=None),
+    start_date: datetime = Query(default=None),
+    end_date: datetime = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_mentor)
+):
+    query = db.query(AssessmentDraft).join(
+        MentorApprentice,
+        MentorApprentice.apprentice_id == AssessmentDraft.apprentice_id
+    ).filter(
+        MentorApprentice.mentor_id == current_user.id,
+        AssessmentDraft.is_submitted.is_(True)
+    )
+
+    if apprentice_id:
+        query = query.filter(AssessmentDraft.apprentice_id == apprentice_id)
+    if start_date:
+        query = query.filter(AssessmentDraft.updated_at >= start_date)
+    if end_date:
+        query = query.filter(AssessmentDraft.updated_at <= end_date)
+
+    return query.all()
+
+@router.get("/submitted-drafts/{draft_id}", response_model=AssessmentDraftOut)
+def get_single_submitted_draft(
+    draft_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_mentor)
+):
+    draft = db.query(AssessmentDraft).filter_by(id=draft_id, is_submitted=True).first()
+    if not draft:
+        raise NotFoundException("Submitted draft not found")
+
+    # Make sure this mentor is linked to the apprentice
+    mapping = db.query(MentorApprentice).filter_by(
+        mentor_id=current_user.id,
+        apprentice_id=draft.apprentice_id
+    ).first()
+
+    if not mapping:
+        raise ForbiddenException("Not authorized to view this draft")
+
+    return draft
+
+from fastapi.responses import StreamingResponse
+import io
+import csv
+import json
+
+@router.get("/submitted-drafts/export")
+def export_submitted_drafts(
+    format: str = Query(default="csv", enum=["csv", "json"]),
+    apprentice_id: str = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_mentor)
+):
+    query = db.query(
+        AssessmentDraft,
+        User.name,
+        User.email
+    ).join(
+        User, AssessmentDraft.apprentice_id == User.id
+    ).join(
+        MentorApprentice,
+        MentorApprentice.apprentice_id == AssessmentDraft.apprentice_id
+    ).filter(
+        MentorApprentice.mentor_id == current_user.id,
+        AssessmentDraft.is_submitted.is_(True)
+    )
+
+    if apprentice_id:
+        query = query.filter(AssessmentDraft.apprentice_id == apprentice_id)
+
+    results = query.all()
+
+    if format == "json":
+        content = json.dumps([{
+            "id": d.id,
+            "apprentice_id": d.apprentice_id,
+            "apprentice_name": name,
+            "apprentice_email": email,
+            "answers": d.answers,
+            "last_question_id": d.last_question_id,
+            "updated_at": d.updated_at.isoformat()
+        } for d, name, email in results], indent=2)
+        return StreamingResponse(io.StringIO(content), media_type="application/json", headers={
+            "Content-Disposition": "attachment; filename=submitted_drafts.json"
+        })
+
+    # CSV export
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow([
+        "id", "apprentice_id", "apprentice_name", "apprentice_email",
+        "last_question_id", "updated_at", "answers"
+    ])
+
+    for d, name, email in results:
+        writer.writerow([
+            d.id,
+            d.apprentice_id,
+            name,
+            email,
+            d.last_question_id,
+            d.updated_at.isoformat(),
+            json.dumps(d.answers)
+        ])
+
+    csv_buffer.seek(0)
+    return StreamingResponse(csv_buffer, media_type="text/csv", headers={
+        "Content-Disposition": "attachment; filename=submitted_drafts.csv"
+    })
+
+@router.get("/my-apprentices/{apprentice_id}", response_model=ApprenticeProfileOut)
+def get_apprentice_profile(
+    apprentice_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Check mentorship relationship
+    link = db.query(MentorApprentice).filter_by(
+        mentor_id=current_user.id,
+        apprentice_id=apprentice_id
+    ).first()
+
+    if not link:
+        raise ForbiddenException("Not authorized to access this apprentice")
+
+    apprentice = db.query(User).filter_by(id=apprentice_id, role="apprentice").first()
+    if not apprentice:
+        raise NotFoundException("Apprentice not found")
+
+    # Fetch stats
+    total_assessments = db.query(AssessmentDraft).filter_by(
+        apprentice_id=apprentice_id,
+        is_submitted=True
+    ).count()
+
+    average_score = db.query(func.avg(AssessmentDraft.score)).filter_by(
+        apprentice_id=apprentice_id,
+        is_submitted=True
+    ).scalar()
+
+    last_submission = db.query(func.max(AssessmentDraft.updated_at)).filter_by(
+        apprentice_id=apprentice_id,
+        is_submitted=True
+    ).scalar()
+
+    return ApprenticeProfileOut(
+        id=apprentice.id,
+        name=apprentice.name,
+        email=apprentice.email,
+        join_date=apprentice.created_at if hasattr(apprentice, "created_at") else None,
+        total_assessments=total_assessments,
+        average_score=round(average_score, 2) if average_score else None,
+        last_submission=last_submission
+    )

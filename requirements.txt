@@ -6,4 +6,9 @@ python-jose
 firebase-admin
 pydantic
 sendgrid
-openai
+openai>=1.0.0
+pytest
+pytest-asyncio
+httpx
+python-dotenv
+pydantic[email]

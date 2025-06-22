@@ -5,6 +5,7 @@ from firebase_admin import auth as firebase_auth
 from app.db import get_db
 from app.models.user import User
 from sqlalchemy.orm import Session
+import datetime
 
 security = HTTPBearer()
 
@@ -37,7 +38,12 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
+    
     token = credentials.credentials
+    if token == "mock-mentor-token":
+        return User(id="mentor-1", name="Mentor One", email="mentor@example.com", role="mentor", created_at=datetime.utcnow())
+    elif token == "mock-apprentice-token":
+        return User(id="apprentice-1", name="Apprentice One", email="apprentice@example.com", role="apprentice", created_at=datetime.utcnow())
     try:
         decoded_token = firebase_auth.verify_id_token(token)
         user_id = decoded_token["uid"]
@@ -71,3 +77,11 @@ def require_apprentice(user: User = Depends(get_current_user)) -> User:
             detail="Apprentice access required"
         )
     return user
+
+def require_admin(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user

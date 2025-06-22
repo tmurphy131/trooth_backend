@@ -7,4 +7,4 @@ class Question(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     text = Column(String, nullable=False)
-    category_id = Column(String, ForeignKey("categories.id"), nullable=False)
+    category_id = Column(ForeignKey("categories.id"))

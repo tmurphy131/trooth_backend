@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Import your Base and models
 from app.db import Base
 from app.models import ( user, assessment, mentor_apprentice, apprentice_invitation, 
-    question, category, assessment_draft  )
+    question, category, assessment_draft, assessment_answer, assessment_template, assessment_template_question  )
 
 # Alembic Config object
 config = context.config
