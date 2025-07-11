@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Dict, Optional
 from datetime import datetime
+from app.schemas.assessment_score_history import AssessmentScoreHistoryOut
 
 
 class AssessmentCreate(BaseModel):
@@ -15,6 +16,7 @@ class AssessmentOut(BaseModel):
     scores: Optional[Dict[str, int]]
     recommendation: Optional[str]
     created_at: datetime
+    latest_score: Optional[AssessmentScoreHistoryOut] = None
 
     class Config:
         from_attributes = True

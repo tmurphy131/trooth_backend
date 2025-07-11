@@ -6,6 +6,7 @@ from app.db import get_db
 from app.models.user import User
 from sqlalchemy.orm import Session
 import datetime
+from app.schemas.user import UserSchema
 
 security = HTTPBearer()
 
@@ -78,10 +79,20 @@ def require_apprentice(user: User = Depends(get_current_user)) -> User:
         )
     return user
 
-def require_admin(current_user: User = Depends(get_current_user)):
+# def require_admin(current_user: User = Depends(get_current_user)):
+#     if current_user.role != "admin":
+#         raise HTTPException(
+#             status_code=status.HTTP_403_FORBIDDEN,
+#             detail="Admin privileges required"
+#         )
+#     return current_user
+
+def require_admin(current_user: UserSchema = Depends(get_current_user)) -> UserSchema:
     if current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
-        )
+        raise HTTPException(status_code=403, detail="Admins only")
+    return current_user
+
+def require_mentor_or_admin(current_user: UserSchema = Depends(get_current_user)) -> UserSchema:
+    if current_user.role not in {"mentor", "admin"}:
+        raise HTTPException(status_code=403, detail="Mentors or admins only.")
     return current_user

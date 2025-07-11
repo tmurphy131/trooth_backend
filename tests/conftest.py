@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.db import Base, get_db
 from app.models.user import User
+from app.schemas.user import UserCreate, UserSchema
 from app.models.mentor_apprentice import MentorApprentice
 from app.services.auth import get_current_user
 import uuid
@@ -53,11 +54,11 @@ class MockUser:
         self.email = f"{role}@example.com"
         self.role = role
 
-@pytest.fixture
-def mock_admin(monkeypatch):
-    def _get_mock_admin():
-        return MockUser(role="admin")
-    monkeypatch.setattr("app.services.auth.get_current_user", _get_mock_admin)
+# @pytest.fixture
+# def mock_admin(monkeypatch):
+#     def _get_mock_admin():
+#         return MockUser(role="admin")
+#     monkeypatch.setattr("app.services.auth.get_current_user", _get_mock_admin)
 
 @pytest.fixture
 def mock_apprentice(monkeypatch):
@@ -65,11 +66,26 @@ def mock_apprentice(monkeypatch):
         return MockUser(role="apprentice")
     monkeypatch.setattr("app.services.auth.get_current_user", _get_mock_apprentice)
 
+# @pytest.fixture
+# def mock_mentor(monkeypatch):
+#     def _get_mock_mentor():
+#         return MockUser(role="mentor")
+#     monkeypatch.setattr("app.services.auth.get_current_user", _get_mock_mentor)
+
 @pytest.fixture
-def mock_mentor(monkeypatch):
-    def _get_mock_mentor():
-        return MockUser(role="mentor")
-    monkeypatch.setattr("app.services.auth.get_current_user", _get_mock_mentor)
+def mock_admin(monkeypatch):
+    admin_id = str(uuid4())
+
+    def mock_get_current_user():
+        return UserSchema(
+            id=admin_id,
+            name="Admin",
+            email="admin@example.com",
+            role="admin"
+        )
+
+    monkeypatch.setattr("app.services.auth.get_current_user", mock_get_current_user)
+    return admin_id
 
 @pytest.fixture
 def mentor_user(db_session):
@@ -120,3 +136,18 @@ def db_session():
 @pytest.fixture
 def test_db(db_session):
     return db_session
+
+@pytest.fixture
+def mock_mentor(monkeypatch):
+    mentor_id = str(uuid4())
+
+    def mock_get_current_user():
+        return UserSchema(
+            id=mentor_id,
+            name="Mentor",
+            email="mentor@example.com",
+            role="mentor"
+        )
+
+    monkeypatch.setattr("app.services.auth.get_current_user", mock_get_current_user)
+    return mentor_id

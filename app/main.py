@@ -10,6 +10,10 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from app.routes import admin_template
 import logging
+from app.routes import assessment_score_history
+from app.routes import apprentices
+from app.routes import mentor_notes
+
 
 load_dotenv()  # Automatically loads from `.env`
 
@@ -31,6 +35,9 @@ app.include_router(admin_template.router)
 app.include_router(assessment_draft.router, prefix="/assessment-drafts")
 app.include_router(invite.router, prefix="/invitations")
 app.include_router(mentor.router)
+app.include_router(assessment_score_history.router)
+app.include_router(apprentices.router)
+app.include_router(mentor_notes.router)
 
 
 logging.basicConfig(

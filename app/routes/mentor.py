@@ -13,6 +13,7 @@ from fastapi import Query
 from datetime import datetime
 from app.services.auth import get_current_user
 from app.exceptions import ForbiddenException, NotFoundException
+from sqlalchemy.orm import joinedload
 
 router = APIRouter()
 
@@ -66,6 +67,37 @@ from app.models.assessment import Assessment
 from app.schemas.assessment import AssessmentOut
 
 
+# @router.get("/apprentice/{apprentice_id}/submitted-assessments", response_model=list[AssessmentOut])
+# def get_submitted_assessments_for_apprentice(
+#     apprentice_id: str,
+#     category: str = Query(None),
+#     start_date: datetime = Query(None),
+#     end_date: datetime = Query(None),
+#     skip: int = Query(0, ge=0),
+#     limit: int = Query(10, ge=1),
+#     current_user: User = Depends(require_mentor),
+#     db: Session = Depends(get_db)
+# ):
+#     # Verify mentor-apprentice relationship
+#     mapping = db.query(MentorApprentice).filter_by(
+#         mentor_id=current_user.id,
+#         apprentice_id=apprentice_id
+#     ).first()
+#     if not mapping:
+#         raise ForbiddenException("Not authorized to view this apprentice")
+
+#     query = db.query(Assessment).filter_by(apprentice_id=apprentice_id)
+
+#     if category:
+#         query = query.filter(Assessment.category == category)
+#     if start_date:
+#         query = query.filter(Assessment.created_at >= start_date)
+#     if end_date:
+#         query = query.filter(Assessment.created_at <= end_date)
+
+#     assessments = query.order_by(Assessment.created_at.desc()).offset(skip).limit(limit).all()
+#     return assessments
+
 @router.get("/apprentice/{apprentice_id}/submitted-assessments", response_model=list[AssessmentOut])
 def get_submitted_assessments_for_apprentice(
     apprentice_id: str,
@@ -85,7 +117,11 @@ def get_submitted_assessments_for_apprentice(
     if not mapping:
         raise ForbiddenException("Not authorized to view this apprentice")
 
-    query = db.query(Assessment).filter_by(apprentice_id=apprentice_id)
+    query = (
+        db.query(Assessment)
+        .options(joinedload(Assessment.score_history))  # 👈 include related scores
+        .filter(Assessment.apprentice_id == apprentice_id)
+    )
 
     if category:
         query = query.filter(Assessment.category == category)

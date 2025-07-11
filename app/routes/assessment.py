@@ -8,6 +8,7 @@ from app.services import ai_scoring
 from app.services.email import send_assessment_email
 from app.exceptions import ForbiddenException, NotFoundException
 import uuid
+from sqlalchemy.orm import joinedload
 
 router = APIRouter()
 
