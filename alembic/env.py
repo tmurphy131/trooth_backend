@@ -2,7 +2,7 @@ from logging.config import fileConfig
 import os
 import sys
 from sqlalchemy import engine_from_config, pool
-from alembic import context
+from alembic import context 
 
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -36,6 +36,11 @@ def run_migrations_offline():
 
 def run_migrations_online():
     """Run migrations in 'online' mode."""
+    # Override sqlalchemy.url with environment variable if set
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        config.set_main_option("sqlalchemy.url", database_url)
+    
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",

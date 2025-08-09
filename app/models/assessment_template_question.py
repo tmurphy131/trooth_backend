@@ -13,3 +13,7 @@ class AssessmentTemplateQuestion(Base):
     template_id = Column(String, ForeignKey("assessment_templates.id"))
     question_id = Column(String, ForeignKey("questions.id"))
     order = Column(Integer, nullable=False)
+    
+    # Relationships
+    question = relationship("Question", back_populates="template_questions")
+    template = relationship("AssessmentTemplate", back_populates="questions")

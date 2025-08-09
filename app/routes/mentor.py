@@ -6,7 +6,9 @@ from app.db import get_db
 from app.models.user import User
 from app.models.mentor_apprentice import MentorApprentice
 from app.models.assessment_draft import AssessmentDraft
-from app.schemas.assessment_draft import AssessmentDraftOut
+from app.models.question import Question
+from app.models.assessment_template_question import AssessmentTemplateQuestion
+from app.schemas.assessment_draft import AssessmentDraftOut, QuestionItem
 from app.models.user import User as UserModel
 from app.schemas.apprentice_profile import ApprenticeProfileOut
 from fastapi import Query
@@ -60,7 +62,26 @@ def get_apprentice_draft(
     if not draft:
         raise NotFoundException("No draft found for apprentice")
 
-    return draft
+    # Get questions for this template
+    questions = (
+        db.query(Question)
+        .join(AssessmentTemplateQuestion, Question.id == AssessmentTemplateQuestion.question_id)
+        .filter(AssessmentTemplateQuestion.template_id == draft.template_id)
+        .order_by(AssessmentTemplateQuestion.order)
+        .all()
+    )
+    questions_out = [QuestionItem.from_orm(q) for q in questions]
+
+    # Return as AssessmentDraftOut
+    return AssessmentDraftOut(
+        id=draft.id,
+        apprentice_id=draft.apprentice_id,
+        template_id=draft.template_id,
+        answers=draft.answers,
+        last_question_id=draft.last_question_id,
+        is_submitted=draft.is_submitted,
+        questions=questions_out
+    )
 
 from app.models.assessment import Assessment
 from app.schemas.assessment import AssessmentOut
@@ -146,7 +167,39 @@ def get_submitted_drafts(
     if end_date:
         query = query.filter(AssessmentDraft.updated_at <= end_date)
 
-    return query.all()
+    drafts = query.all()
+    
+    # Build the response objects properly
+    draft_responses = []
+    for draft in drafts:
+        # Get questions for this template with proper relationship loading
+        template_questions = db.query(AssessmentTemplateQuestion)\
+            .join(Question)\
+            .filter(AssessmentTemplateQuestion.template_id == draft.template_id)\
+            .order_by(AssessmentTemplateQuestion.order)\
+            .all()
+        
+        questions = [
+            QuestionItem(
+                id=str(tq.question.id),
+                text=tq.question.text,
+                question_type=tq.question.question_type.value,
+                options=[opt.option_text for opt in tq.question.options] if tq.question.options else [],
+                category_id=str(tq.question.category_id) if tq.question.category_id else None
+            ) for tq in template_questions
+        ]
+        
+        draft_responses.append(AssessmentDraftOut(
+            id=str(draft.id),
+            apprentice_id=str(draft.apprentice_id),
+            template_id=str(draft.template_id),
+            answers=draft.answers,
+            last_question_id=str(draft.last_question_id) if draft.last_question_id else None,
+            is_submitted=draft.is_submitted,
+            questions=questions
+        ))
+    
+    return draft_responses
 
 @router.get("/submitted-drafts/{draft_id}", response_model=AssessmentDraftOut)
 def get_single_submitted_draft(
@@ -167,7 +220,36 @@ def get_single_submitted_draft(
     if not mapping:
         raise ForbiddenException("Not authorized to view this draft")
 
-    return draft
+    # Get questions for this template
+    template_questions = db.query(AssessmentTemplateQuestion)\
+        .filter_by(template_id=draft.template_id)\
+        .order_by(AssessmentTemplateQuestion.order)\
+        .all()
+    
+    questions = [
+        QuestionItem(
+            id=str(tq.question.id),
+            text=tq.question.text,
+            question_type=tq.question.question_type.value,
+            options=[opt.option_text for opt in tq.question.options] if tq.question.options else [],
+            category_id=str(tq.question.category_id) if tq.question.category_id else None
+        ) for tq in template_questions
+    ]
+
+    # Return as AssessmentDraftOut
+    return AssessmentDraftOut(
+        id=str(draft.id),
+        user_id=str(draft.apprentice_id),
+        assessment_template_id=str(draft.template_id),
+        title=draft.title,
+        answers=draft.answers,
+        created_at=draft.created_at,
+        updated_at=draft.updated_at,
+        is_submitted=draft.is_submitted,
+        submitted_at=draft.submitted_at,
+        score=draft.score,
+        questions=questions
+    )
 
 from fastapi.responses import StreamingResponse
 import io

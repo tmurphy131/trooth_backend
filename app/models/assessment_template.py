@@ -12,4 +12,12 @@ class AssessmentTemplate(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     is_published = Column(Boolean, default=False)
+    is_master_assessment = Column(Boolean, default=False)  # True for the main Trooth Assessment
+    created_by = Column(String, ForeignKey("users.id"), nullable=True)  # Allow null for existing records
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationship to User who created the template
+    creator = relationship("User", back_populates="created_templates")
+    
+    # Relationship to template questions
+    questions = relationship("AssessmentTemplateQuestion", back_populates="template")
