@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger("app.database")
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgres://trooth:trooth@localhost:5432/trooth_db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://trooth:trooth@localhost:5432/trooth_db")
 
 # Enhanced engine configuration with connection pooling
 engine = create_engine(
